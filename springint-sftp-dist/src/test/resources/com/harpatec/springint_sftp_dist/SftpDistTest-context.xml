@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-twitter="http://www.springframework.org/schema/integration/twitter"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int-sftp="http://www.springframework.org/schema/integration/sftp"
+	xmlns:mongo="http://www.springframework.org/schema/data/mongo"
+	xsi:schemaLocation="http://www.springframework.org/schema/data/mongo http://www.springframework.org/schema/data/mongo/spring-mongo-1.1.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/sftp http://www.springframework.org/schema/integration/sftp/spring-integration-sftp-2.2.xsd
+		http://www.springframework.org/schema/integration/twitter http://www.springframework.org/schema/integration/twitter/spring-integration-twitter.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+
+	<bean id="sftpSessionFactory"
+		class="org.springframework.integration.sftp.session.DefaultSftpSessionFactory">
+		<property name="host" value="localhost" />
+		<property name="user" value="ftpuser" />
+		<property name="password" value="ftppass" />
+		<property name="port" value="22" />
+	</bean>
+
+	<int-sftp:inbound-channel-adapter id="sftpInboundChannelAdapter"
+		channel="processSftpFiles" filter="lockingFilter" session-factory="sftpSessionFactory"
+		remote-directory="pickup" local-directory="incoming">
+
+		<int:poller id="poller" fixed-delay="5000" />
+
+	</int-sftp:inbound-channel-adapter>
+
+	<bean id="lockingFilter"
+		class="com.harpatec.sftp_dist.filter.DataRepositoryLockingSftpLsEntryFilter">
+		<property name="remoteHostName" value="remoteHost1" />
+	</bean>
+
+	<int:channel id="processSftpFiles" />
+
+	<int:service-activator input-channel="processSftpFiles"
+		expression="System.out.println('Rerceived file: ' + payload.getName())" />
+
+	<int:transformer input-channel="processSftpFiles"
+		output-channel="logger" expression="'Received file: ' + payload.getName()" />
+
+	<int:logging-channel-adapter id="logger"
+		level="DEBUG" />
+
+
+	<!-- Mongo Setup -->
+
+	<mongo:repositories base-package="com.harpatec.sftp_dist.repository"
+		mongo-template-ref="mongoTemplate" />
+
+	<bean id="mongoTemplate" class="org.springframework.data.mongodb.core.MongoTemplate">
+		<constructor-arg ref="mongoDbFactory" />
+		<constructor-arg ref="mongoConverter" />
+	</bean>
+
+	<mongo:db-factory id="mongoDbFactory" host="localhost"
+		dbname="sftp_dist_example" />
+
+	<mongo:mapping-converter id="mongoConverter">
+		<mongo:custom-converters base-package="com.harpatec.sftp_dist.converter" />
+	</mongo:mapping-converter>
+	
+</beans>
