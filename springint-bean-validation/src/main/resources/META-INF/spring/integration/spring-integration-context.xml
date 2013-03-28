@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration
+		http://www.springframework.org/schema/integration/spring-integration.xsd">
+
+	<!-- See also: http://static.springsource.org/spring-integration/reference/htmlsingle/#gateway-proxy 
+		http://www.eaipatterns.com/MessagingGateway.html -->
+	<int:gateway id="gateway" default-request-timeout="5000"
+		default-reply-timeout="5000" default-request-channel="requestChannel"
+		default-reply-channel="replyChannel"
+		service-interface="com.harpatec.examples.service.BeanValidationService">
+		<int:method name="validate" />
+	</int:gateway>
+
+	<int:filter input-channel="requestChannel" output-channel="replyChannel"
+		ref="beanValidationFilter" />
+
+	<bean id="beanValidationFilter" class="com.harpatec.examples.filter.BeanValidationFilter">
+		<constructor-arg ref="validator" />
+		<property name="validationFailureThrowsException" value="true" />
+	</bean>
+
+	<bean id="validator"
+		class="org.springframework.validation.beanvalidation.LocalValidatorFactoryBean" />
+
+	<int:channel id="replyChannel" />
+	<int:channel id="requestChannel" />
+
+</beans>
