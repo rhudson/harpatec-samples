@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:mongo="http://www.springframework.org/schema/data/mongo"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/data/mongo http://www.springframework.org/schema/data/mongo/spring-mongo.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.2.xsd">
+
+
+	<context:property-placeholder location="classpath:/config.properties" />
+
+	<!-- ************************************************************ -->
+	<!-- Mongo Setup -->
+	<!-- ************************************************************ -->
+
+	<mongo:db-factory id="mongoDbFactory" host="${mongo.host}"
+		dbname="#{ T(java.lang.System).currentTimeMillis() }" />
+
+	<mongo:mapping-converter id="mongoConverter">
+		<mongo:custom-converters base-package="com.harpatec.examples.converter" />
+	</mongo:mapping-converter>
+
+	<mongo:repositories base-package="com.harpatec.examples.repository"
+		mongo-template-ref="mongoTemplate" />
+
+	<bean id="mongoTemplate" class="org.springframework.data.mongodb.core.MongoTemplate">
+		<constructor-arg ref="mongoDbFactory" />
+		<constructor-arg ref="mongoConverter" />
+		<property name="writeConcern" value="SAFE" />
+	</bean>
+
+</beans>

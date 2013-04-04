@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int-amqp="http://www.springframework.org/schema/integration/amqp"
+	xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+	xmlns:int-stream="http://www.springframework.org/schema/integration/stream"
+	xmlns:mongo="http://www.springframework.org/schema/data/mongo"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/data/mongo http://www.springframework.org/schema/data/mongo/spring-mongo-1.1.xsd
+		http://www.springframework.org/schema/integration/amqp http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+		http://www.springframework.org/schema/integration/stream http://www.springframework.org/schema/integration/stream/spring-integration-stream.xsd
+		http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.2.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.1.xsd">
+
+	<context:property-placeholder location="classpath:/config.properties" />
+	<context:annotation-config />
+	<context:component-scan base-package="com.harpatec.examples.service" />
+
+	<!-- Create a scheduler for the MessageRecordReaper process -->
+	<task:annotation-driven scheduler="myScheduler" />
+	<task:scheduler id="myScheduler" />
+
+
+	<rabbit:connection-factory id="amqpConnectionFactoryInbound"
+		host="${amqp.inbound.host}" port="${amqp.inbound.port}" virtual-host="${amqp.inbound.vhost}"
+		username="${amqp.inbound.username}" password="${amqp.inbound.password}"
+		connection-factory="rabbitConnectionFactoryInbound" />
+
+	<bean id="rabbitConnectionFactoryInbound" class="com.rabbitmq.client.ConnectionFactory">
+		<property name="requestedHeartbeat" value="10" />
+	</bean>
+
+	<rabbit:connection-factory id="amqpConnectionFactoryOutbound"
+		host="${amqp.outbound.host}" port="${amqp.outbound.port}"
+		virtual-host="${amqp.outbound.vhost}" username="${amqp.outbound.username}"
+		password="${amqp.outbound.password}" connection-factory="rabbitConnectionFactoryOutbound" />
+
+	<bean id="rabbitConnectionFactoryOutbound" class="com.rabbitmq.client.ConnectionFactory">
+		<property name="requestedHeartbeat" value="7" />
+	</bean>
+
+	<rabbit:template id="amqpTemplateOutbound"
+		connection-factory="amqpConnectionFactoryOutbound" channel-transacted="true" />
+
+	<rabbit:template id="amqpTemplateInbound"
+		connection-factory="amqpConnectionFactoryInbound" routing-key="${amqp.inbound.queuename}" />
+
+	<int-amqp:inbound-channel-adapter
+		channel="amqpInboundChannel" connection-factory="amqpConnectionFactoryInbound"
+		channel-transacted="false" error-channel="amqpInboundError"
+		mapped-request-headers="*" queue-names="${amqp.inbound.queuename}"
+		concurrent-consumers="2" />
+
+	<int:service-activator input-channel="amqpInboundChannel"
+		ref="amqpInboundGateway" />
+
+	<int:gateway id="amqpInboundGateway"
+		default-request-channel="amqpInboundGatewayChannel" error-channel="amqpInboundGatewayErrorChannel"
+		default-reply-timeout="0" />
+
+	<int:chain input-channel="amqpInboundGatewayChannel"
+		output-channel="amqpOutboundChannel">
+
+		<!-- Transform JSON byte[] to a String -->
+		<!-- Also works if incoming payload is already a String -->
+		<int:transformer expression="new String(payload)" />
+
+		<int:header-enricher>
+			<int:header name="queueName" value="${amqp.inbound.queuename}" />
+			<int:header name="messageKey" method="buildKey">
+				<bean class="com.harpatec.examples.filter.MessageKeyGenerator">
+					<property name="headersInKey">
+						<list>
+							<util:constant
+								static-field="com.harpatec.examples.filter.DuplicateMessageFilter.QUEUE_NAME" />
+							<value>clientId</value>
+						</list>
+					</property>
+				</bean>
+			</int:header>
+		</int:header-enricher>
+
+		<int:filter>
+			<bean class="com.harpatec.examples.filter.DuplicateMessageFilter">
+				<property name="recordPayload" value="true" />
+			</bean>
+		</int:filter>
+
+		<int:json-to-object-transformer type="java.util.Map" />
+
+		<int:transformer>
+			<bean class="com.harpatec.examples.filter.MessageTransformer" />
+		</int:transformer>
+
+		<int:splitter />
+
+	</int:chain>
+
+	<int-amqp:outbound-channel-adapter
+		channel="amqpOutboundChannel" amqp-template="amqpTemplateOutbound"
+		routing-key="${amqp.outbound.queuename}" />
+
+
+	<int:channel id="amqpInboundChannel" />
+	<int:channel id="amqpInboundError" />
+	<int:channel id="amqpInboundGatewayChannel" />
+	<int:channel id="amqpInboundGatewayErrorChannel" />
+
+	<int:channel id="amqpOutboundChannel">
+		<int:interceptors>
+			<ref bean="messageCompletionInterceptor" />
+		</int:interceptors>
+	</int:channel>
+
+	<bean id="messageCompletionInterceptor"
+		class="com.harpatec.examples.filter.MessageCompletionInterceptor" />
+
+	<int-stream:stdout-channel-adapter
+		channel="amqpInboundError" />
+	<int-stream:stdout-channel-adapter
+		channel="amqpInboundGatewayErrorChannel" />
+
+
+	<!-- ************************************************************ -->
+	<!-- Use RabbitAdmin bean to ensure RabbitMQ config is present on server -->
+	<!-- ************************************************************ -->
+
+	<rabbit:admin id="rabbitAdminInbound" connection-factory="amqpConnectionFactoryInbound" />
+	<rabbit:admin id="rabbitAdminOutbound" connection-factory="amqpConnectionFactoryOutbound" />
+	<rabbit:queue name="${amqp.inbound.queuename}" />
+	<rabbit:queue name="${amqp.outbound.queuename}" />
+
+
+	<!-- ************************************************************ -->
+	<!-- Mongo Setup -->
+	<!-- ************************************************************ -->
+
+	<mongo:db-factory id="mongoDbFactory" host="${mongo.host}"
+		dbname="${mongo.database}" />
+
+	<mongo:mapping-converter id="mongoConverter">
+		<mongo:custom-converters base-package="com.harpatec.examples.converter" />
+	</mongo:mapping-converter>
+
+	<mongo:repositories base-package="com.harpatec.examples.repository"
+		mongo-template-ref="mongoTemplate" />
+
+	<bean id="mongoTemplate" class="org.springframework.data.mongodb.core.MongoTemplate">
+		<constructor-arg ref="mongoDbFactory" />
+		<constructor-arg ref="mongoConverter" />
+		<property name="writeConcern" value="SAFE" />
+	</bean>
+
+</beans>
