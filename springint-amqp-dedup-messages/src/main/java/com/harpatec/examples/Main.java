@@ -78,6 +78,17 @@ public final class Main {
 		LOGGER.debug("Submitting a duplicate message which should get caught by the DuplicateMessageFilter.");
 		submitMessage(inboundTemplate, messageMap);
 
+		Thread.sleep(5 * 1000);
+		messageMap.put("count", "0");
+		LOGGER.debug("Submitting a message which will not go all the way through the message flow.");
+		submitMessage(inboundTemplate, messageMap);
+
+		Thread.sleep(5 * 1000);
+		messageMap.put("count", "1");
+		messageMap.put("fail", "true");
+		LOGGER.debug("Submitting a message which should signal that an Exception should be thrown.");
+		submitMessage(inboundTemplate, messageMap);
+
 		Thread.sleep(6 * 60 * 1000);
 
 		System.exit(0);

@@ -27,16 +27,21 @@ public class DuplicateMessageFilter implements InitializingBean {
 
 	@Filter
 	public boolean accept(Message<String> message) {
+		return acceptPayload((String) message.getHeaders().get(MESSAGE_KEY),
+				(String) message.getHeaders().get(QUEUE_NAME), message.getPayload());
+	}
+
+	public boolean acceptPayload(String messageKey, String queueName, String payload) {
 
 		MessageRecord messageRecord = new MessageRecord();
-		messageRecord.setKey((String) message.getHeaders().get(MESSAGE_KEY));
-		messageRecord.setQueueName((String) message.getHeaders().get(QUEUE_NAME));
+		messageRecord.setKey(messageKey);
+		messageRecord.setQueueName(queueName);
 		messageRecord.setCompletionTime(null);
 		messageRecord.setReceiveCount(1);
 		messageRecord.getReceiveHistory().add(new DateTime());
 
 		if (recordPayload) {
-			messageRecord.setPayload(message.getPayload());
+			messageRecord.setPayload(payload);
 		}
 
 		try {
@@ -50,6 +55,7 @@ public class DuplicateMessageFilter implements InitializingBean {
 		}
 
 		return true;
+
 	}
 
 	private void recordEvent(String key) {

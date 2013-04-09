@@ -54,10 +54,32 @@
 		channel="amqpInboundChannel" connection-factory="amqpConnectionFactoryInbound"
 		channel-transacted="false" error-channel="amqpInboundError"
 		mapped-request-headers="*" queue-names="${amqp.inbound.queuename}"
-		concurrent-consumers="2" />
+		concurrent-consumers="2"/>
+
+	<bean id="messageKeyGeneratorAdvice" class="com.harpatec.examples.filter.MessageKeyGeneratorAdvice">
+		<property name="messageKeyGenerator">
+			<bean class="com.harpatec.examples.filter.MessageKeyGenerator">
+				<property name="queueName" value="${amqp.inbound.queuename}"/>
+				<property name="headersInKey">
+					<list>
+						<value>clientId</value>
+					</list>
+				</property>
+			</bean>
+		</property>
+		<property name="messageFilter">
+			<bean class="com.harpatec.examples.filter.DuplicateMessageFilter">
+				<property name="recordPayload" value="true" />
+			</bean>
+		</property>
+	</bean>
 
 	<int:service-activator input-channel="amqpInboundChannel"
-		ref="amqpInboundGateway" />
+		ref="amqpInboundGateway">
+		<int:request-handler-advice-chain>
+			<ref bean="messageKeyGeneratorAdvice" />
+		</int:request-handler-advice-chain>
+	</int:service-activator>
 
 	<int:gateway id="amqpInboundGateway"
 		default-request-channel="amqpInboundGatewayChannel" error-channel="amqpInboundGatewayErrorChannel"
@@ -70,29 +92,10 @@
 		<!-- Also works if incoming payload is already a String -->
 		<int:transformer expression="new String(payload)" />
 
-		<int:header-enricher>
-			<int:header name="queueName" value="${amqp.inbound.queuename}" />
-			<int:header name="messageKey" method="buildKey">
-				<bean class="com.harpatec.examples.filter.MessageKeyGenerator">
-					<property name="headersInKey">
-						<list>
-							<util:constant
-								static-field="com.harpatec.examples.filter.DuplicateMessageFilter.QUEUE_NAME" />
-							<value>clientId</value>
-						</list>
-					</property>
-				</bean>
-			</int:header>
-		</int:header-enricher>
-
-		<int:filter>
-			<bean class="com.harpatec.examples.filter.DuplicateMessageFilter">
-				<property name="recordPayload" value="true" />
-			</bean>
-		</int:filter>
-
 		<int:json-to-object-transformer type="java.util.Map" />
 
+		<int:filter expression="T(java.lang.Integer).parseInt(payload.get('count')) > 0"/>
+		
 		<int:transformer>
 			<bean class="com.harpatec.examples.filter.MessageTransformer" />
 		</int:transformer>
@@ -110,15 +113,7 @@
 	<int:channel id="amqpInboundError" />
 	<int:channel id="amqpInboundGatewayChannel" />
 	<int:channel id="amqpInboundGatewayErrorChannel" />
-
-	<int:channel id="amqpOutboundChannel">
-		<int:interceptors>
-			<ref bean="messageCompletionInterceptor" />
-		</int:interceptors>
-	</int:channel>
-
-	<bean id="messageCompletionInterceptor"
-		class="com.harpatec.examples.filter.MessageCompletionInterceptor" />
+	<int:channel id="amqpOutboundChannel"/>
 
 	<int-stream:stdout-channel-adapter
 		channel="amqpInboundError" />

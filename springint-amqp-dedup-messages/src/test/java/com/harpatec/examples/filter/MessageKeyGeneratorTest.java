@@ -22,16 +22,15 @@ public class MessageKeyGeneratorTest {
 	@Before
 	public void setUp() throws Exception {
 		generator = new MessageKeyGenerator();
+		generator.setQueueName(QUEUE_NAME);
 	}
 
 	@Test
 	public void testBuildKey() {
 		MessageBuilder<String> builder = MessageBuilder.withPayload(PAYLOAD);
-		builder.setHeader(DuplicateMessageFilter.QUEUE_NAME, QUEUE_NAME);
 		builder.setHeader("clientId", CLIENT_ID);
 
 		List<String> headersInKey = new ArrayList<String>();
-		headersInKey.add(DuplicateMessageFilter.QUEUE_NAME);
 		headersInKey.add("clientId");
 		generator.setHeadersInKey(headersInKey);
 

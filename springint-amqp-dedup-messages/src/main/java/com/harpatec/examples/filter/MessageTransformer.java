@@ -4,11 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MessageTransformer {
 
-	private static final Logger LOGGER = Logger.getLogger(MessageTransformer.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(MessageTransformer.class);
 
 	public List<String> transform(Map<String, Object> payload) throws InterruptedException {
 
@@ -16,11 +17,15 @@ public class MessageTransformer {
 
 		int count = 0;
 
+		if (payload.get("fail") != null && "true".equalsIgnoreCase(payload.get("fail").toString())) {
+			throw new RuntimeException("Failing as requested by incoming message!");
+		}
+
 		if (payload.get("count") != null) {
 			count = Integer.parseInt(payload.get("count").toString());
 		}
-
-		LOGGER.debug("Splitting into " + count + " messages.");
+		
+		LOGGER.debug("Splitting into {} messages.", count);
 
 		int timeout = 30;
 		LOGGER.debug("This may take " + timeout + " seconds...");
