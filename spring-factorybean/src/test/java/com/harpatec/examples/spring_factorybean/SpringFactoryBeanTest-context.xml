@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean id="springBean" class="com.harpatec.examples.spring_factorybean.SpringBean"
+		p:fields-ref="fieldNames" p:sizes-ref="fieldSizes" />
+
+	<bean id="fieldNames" factory-bean="parsedResourceComponentFactory"
+		factory-method="getNames" />
+
+	<bean id="fieldSizes" factory-bean="parsedResourceComponentFactory"
+		factory-method="getSizes" />
+
+	<bean id="parsedResourceComponentFactory"
+		class="com.harpatec.examples.spring_factorybean.ParsedResourceComponentFactory"
+		p:parsedResource-ref="parsedResourceFactory" />
+
+	<bean id="parsedResourceFactory"
+		class="com.harpatec.examples.spring_factorybean.ParsedResourceFactory"
+		p:fieldNamesResource="classpath:field_names.txt" />
+		
+</beans>
